@@ -1,60 +1,41 @@
-
-<?php 
-//oxapaystatus.php
+<?php
 define("EvolutionScript", 1);
 require_once("global.php");
+
+// Gateway info
 $gateway = $db->fetchRow("SELECT * FROM gateways WHERE id=10");
-$merchant_api_key = $gateway["account"];
-$currency = $gateway["currency"];
 
-// Extract posted values
-$amount        = floatval($_POST['amount']);
-$email         = $_POST['email'];
-$callback_url  = $_POST['callback_url'];
-$return_url    = $_POST['return_url'];
-$item_name     = $_POST['item_name'];      // e.g. "Deposit" or "Upgrade"
-$item_number   = $_POST['item_number'];    // usually user ID
-$upgrade_id    = $_POST["custom"];    // will be effected when come from upgrade_form/10.php instead of deposit_form/10.php
+// Variable mapping
+$batch = $_POST["trackId"];
+$receiver_email = $gateway["option1"]; // can be blank or admin email for OxaPay
+$customer = $_POST["email"];
+$order_id = intval($_POST["orderId"]);
 $today = TIMENOW;
-$batch=$track_id;
+$upgrade_id = $_POST["custom"] ?? null;
+$amount = floatval($_POST["amount"]);
+$payment_status = $_POST["status"] ?? '';
+$payment_currency = $_POST["currency"] ?? '';
+$response = $_POST["response"] ?? false;
+$oxapay_currency = $gateway["currency"];
 
-$order_id      = "ORD-" . uniqid($item_number . "-");
-$description   = "{$item_name} by user #{$item_number}";
-
-
-if ($response === FALSE) {
-    die('Error contacting OxaPay.');
+// Merchant key check (optional, mostly for PayPal flow)
+if ($gateway["option1"] && strtolower($gateway["option1"]) != strtolower($receiver_email)) {
+    exit();
 }
 
-$result = json_decode($response, true);
-
-if (!empty($result['data']['payment_url'])) {
-    header("Location: " . $result['data']['payment_url']);
-    exit;
+// Validate OxaPay response
+if ($response != true) {
+    exit();
+}
+if ($payment_status != "Success") {
+    exit();
+}
+if ($payment_currency != $oxapay_currency) {
+    exit();
+}
+if (is_numeric($upgrade_id)) {
+    include(GATEWAYS . "process_upgrade.php");
 } else {
-    echo "<h2>Payment creation failed</h2>";
-    echo "<pre>" . print_r($result, true) . "</pre>";
-}
-if( strcmp(trim($response), "VERIFIED") == 0 ) 
-{
-    if( $payment_status != "Success" ) 
-    {
-        exit();
-    }
-
-    if( $payment_currency != $currency ) 
-    {
-        exit();
-    }
-
-    if( is_numeric($upgrade_id) ) 
-    {
-        include(GATEWAYS . "process_upgrade.php");
-    }
-    else
-    {
-        include(GATEWAYS . "process_deposit.php");
-    }
-
+    include(GATEWAYS . "process_deposit.php");
 }
 ?>
